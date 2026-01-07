@@ -104,6 +104,9 @@ import { isAlternateBufferEnabled } from './ui/hooks/useAlternateBuffer.js';
 import { setupTerminalAndTheme } from './utils/terminalTheme.js';
 import { profiler } from './ui/components/DebugProfiler.js';
 
+import { setGlobalDispatcher, ProxyAgent } from 'undici';
+import { socksDispatcher } from 'fetch-socks';
+
 const SLOW_RENDER_MS = 200;
 
 export function validateDnsResolutionOrder(
@@ -336,6 +339,38 @@ export async function main() {
   const argv = await parseArguments(settings.merged);
   parseArgsHandle?.end();
 
+  const proxyUrl = process.env['GEMINI_PROXY'];  // Optional: fallback to custom env var
+
+  if (proxyUrl) {
+    try {
+      const url = new URL(proxyUrl);
+      let dispatcher;
+
+      if (url.protocol === 'socks5:' || url.protocol === 'socks5h:' || url.protocol.startsWith('socks')) {
+        // SOCKS5 support (treat socks5h:// the same – remote DNS resolution handled by server if hostname provided)
+        dispatcher = socksDispatcher({
+          type: 5,
+          host: url.hostname,
+          port: Number(url.port) || 1080,  // Default SOCKS port if omitted
+          userId: url.username || undefined,
+          password: url.password || undefined,
+        });
+      } else if (url.protocol === 'http:' || url.protocol === 'https:') {
+        // Built-in HTTP/HTTPS proxy support
+        dispatcher = new ProxyAgent(proxyUrl);
+      } else {
+        throw new Error('Unsupported proxy protocol (use http:, https:, socks5:, or socks5h:)');
+      }
+
+      setGlobalDispatcher(dispatcher);
+      debugLogger.log(`Using proxy: ${proxyUrl}`);
+    } catch (err) {
+      writeToStderr(`Invalid proxy URL "${proxyUrl}": ${err}\n`);
+      await runExitCleanup();
+      process.exit(ExitCodes.FATAL_INPUT_ERROR);
+    }
+  }
+  
   // Check for invalid input combinations early to prevent crashes
   if (argv.promptInteractive && !process.stdin.isTTY) {
     writeToStderr(
