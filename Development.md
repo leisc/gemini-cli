@@ -1,7 +1,7 @@
 # Development based on the version forked from Google
 
 1. Clone the project codebase
-2. cd geminit-cli
+2. cd gemini-cli
 3. nstall and build everything in order
    ```bash
    npm install
