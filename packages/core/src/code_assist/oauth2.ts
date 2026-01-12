@@ -19,6 +19,7 @@ import { EventEmitter } from 'node:events';
 import open from 'open';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
+import { SocksProxyAgent } from 'socks-proxy-agent';
 import type { Config } from '../config/config.js';
 import {
   getErrorMessage,
@@ -131,12 +132,23 @@ async function initOauthClient(
     }
   }
 
+  const proxy = config.getProxy();
+  let transporterOptions: Record<string, unknown> = { proxy };
+  if (
+    proxy &&
+    (proxy.startsWith('socks5:') ||
+      proxy.startsWith('socks5h:') ||
+      proxy.startsWith('socks:'))
+  ) {
+    transporterOptions = {
+      agent: new SocksProxyAgent(proxy),
+    };
+  }
+
   const client = new OAuth2Client({
     clientId: OAUTH_CLIENT_ID,
     clientSecret: OAUTH_CLIENT_SECRET,
-    transporterOptions: {
-      proxy: config.getProxy(),
-    },
+    transporterOptions,
   });
   const useEncryptedStorage = getUseEncryptedStorageFlag();
 

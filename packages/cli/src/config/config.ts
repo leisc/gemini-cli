@@ -688,6 +688,7 @@ export async function loadCliConfig(
     fileFiltering,
     checkpointing: settings.general?.checkpointing?.enabled,
     proxy:
+      process.env['GEMINI_PROXY'] ||
       process.env['HTTPS_PROXY'] ||
       process.env['https_proxy'] ||
       process.env['HTTP_PROXY'] ||

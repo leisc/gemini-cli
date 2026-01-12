@@ -49,6 +49,7 @@ vi.mock('../utils/paths.js', async (importOriginal) => {
 });
 
 vi.mock('google-auth-library');
+vi.mock('socks-proxy-agent');
 vi.mock('http');
 vi.mock('open');
 vi.mock('crypto');
@@ -1324,6 +1325,61 @@ describe('oauth2', () => {
         await getOauthClient(AuthType.LOGIN_WITH_GOOGLE, mockConfig);
         expect(OAuth2Client).toHaveBeenCalledTimes(2);
       });
+    });
+    it('should use SocksProxyAgent for socks proxies', async () => {
+      const { SocksProxyAgent } = await import('socks-proxy-agent');
+      const mockSocksProxy = 'socks5://proxy.example.com:1080';
+      const socksConfig = {
+        getProxy: () => mockSocksProxy,
+        isBrowserLaunchSuppressed: () => false,
+      } as unknown as Config;
+
+      const mockClientInstance = {
+        generateAuthUrl: vi.fn().mockReturnValue('http://auth-url'),
+        on: vi.fn(),
+        credentials: {},
+        setCredentials: vi.fn(),
+      };
+      vi.mocked(OAuth2Client).mockImplementation(
+        () => mockClientInstance as unknown as OAuth2Client,
+      );
+
+      // We need to mock open since getOauthClient will try to open the auth URL
+      vi.mocked(open).mockImplementation(
+        async () => ({ on: vi.fn() }) as never,
+      );
+
+      // Mock createServer to prevent actual server creation and keep the promise pending
+      const mockHttpServer = {
+        listen: vi.fn(),
+        close: vi.fn(),
+        on: vi.fn(),
+        address: () => ({ port: 3000 }),
+      };
+      (http.createServer as Mock).mockImplementation(
+        () => mockHttpServer as unknown as http.Server,
+      );
+
+      // Start the client (it will wait for auth)
+      const clientPromise = getOauthClient(
+        AuthType.LOGIN_WITH_GOOGLE,
+        socksConfig,
+      );
+
+      // Allow async code (fetchCachedCredentials) to run
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Suppress unhandled rejection if we don't await the promise
+      clientPromise.catch(() => {});
+
+      expect(SocksProxyAgent).toHaveBeenCalledWith(mockSocksProxy);
+      expect(OAuth2Client).toHaveBeenCalledWith(
+        expect.objectContaining({
+          transporterOptions: expect.objectContaining({
+            agent: expect.any(SocksProxyAgent),
+          }),
+        }),
+      );
     });
   });
 

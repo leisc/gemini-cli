@@ -7,6 +7,7 @@
 import { getErrorMessage, isNodeError } from './errors.js';
 import { URL } from 'node:url';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
+import { socksDispatcher } from 'fetch-socks';
 
 const PRIVATE_IP_RANGES = [
   /^10\./,
@@ -59,5 +60,26 @@ export async function fetchWithTimeout(
 }
 
 export function setGlobalProxy(proxy: string) {
+  try {
+    const url = new URL(proxy);
+    if (
+      url.protocol === 'socks5:' ||
+      url.protocol === 'socks5h:' ||
+      url.protocol.startsWith('socks')
+    ) {
+      setGlobalDispatcher(
+        socksDispatcher({
+          type: 5,
+          host: url.hostname,
+          port: Number(url.port) || 1080,
+          userId: url.username,
+          password: url.password,
+        }),
+      );
+      return;
+    }
+  } catch {
+    // ignore invalid URLs, let ProxyAgent handle or fail
+  }
   setGlobalDispatcher(new ProxyAgent(proxy));
 }
