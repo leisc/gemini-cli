@@ -21,7 +21,7 @@ By default, your fork only knows about your own version on GitHub (`origin`). Yo
 1. Open your terminal in your project folder.
 2. Add the original repository as a new remote named **upstream**:
 ```bash
-git remote add upstream https://github.com/ORIGINAL_OWNER/ORIGINAL_REPOSITORY.git
+git remote add upstream https://github.com/google-gemini/gemini-cli.git
 
 ```
 
